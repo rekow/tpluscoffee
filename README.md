@@ -1,5 +1,5 @@
 # t+.coffee
-## A tiny coffeescript port of a tiny javascript templating framework, plus.
+## t.coffee, on steroids.
 
 [`t.js`](http://www.github.com/jasonmoo/t.js) is a simple solution to interpolating values in an html string for insertion into the DOM via `innerHTML`.
 
