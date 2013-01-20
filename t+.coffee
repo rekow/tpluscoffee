@@ -112,6 +112,6 @@ t = @t
     return render(html, @)
 
   t::undo = () ->
-    @render(@_previousElement.outerHTML)
+    @render(@_previousElement.outerHTML) if @_previousElement
 
   return t
