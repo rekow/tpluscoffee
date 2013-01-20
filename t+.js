@@ -25,7 +25,7 @@
     var blocks, extend, include, macro, macros, parse, preprocess, render, templates, trim, triml, trimr, _render;
     include = /\{\{\s*?\&\s*?([^\s]+?)\s*?\}\}/g;
     extend = /^\{\{\s*?\^\s*?([^\s]+?)\s*?\}\}([.\s\S]*)/g;
-    macro = /\{\{\s*?\+\s*?([^\(]+)\(([^\)]+)\)\s*?\}\}/;
+    macro = /\{\{\s*?\+\s*?([^\(]+)\(([^\)]+)\)\s*?\}\}/g;
     blocks = /\{\{\s*?(\$\s*?([^\s]+?))\}\}([\s\S.]+)\{\{\s*?\/\s*?(?:\1|\2)\}\}/g;
     triml = /^\s+/;
     trimr = /\s+$/;
@@ -129,7 +129,9 @@
       return render(html, this);
     };
     t.prototype.undo = function() {
-      return this.render(this._previousElement.outerHTML);
+      if (this._previousElement) {
+        return this.render(this._previousElement.outerHTML);
+      }
     };
     return t;
   })(t);
