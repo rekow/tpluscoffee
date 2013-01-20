@@ -5,7 +5,7 @@
 
  [`t.coffee`](http://www.github.com/davidrekow/t.coffee) ports that simplicity to coffeescript, adding scoped iteration for concise, readable templates.
 
- [`t+.coffee`](http://www.github.com/davidrekow/t-coffee) is the [`Handlebars`](https://github.com/wycats/handlebars.js) to [`t.coffee`](http://www.github.com/davidrekow/t.coffee)'s [`Mustache`](http://mustache.github.com/).
+ `t+` is the [`Handlebars`](https://github.com/wycats/handlebars.js) to `t`'s [`Mustache`](http://mustache.github.com/).
 
 ### Features
 `t.js`
