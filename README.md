@@ -5,7 +5,7 @@
 
  [`t.coffee`](http://www.github.com/davidrekow/t.coffee) ports that simplicity to coffeescript, adding scoped iteration for concise, readable templates.
 
- [`t+.coffee`](http://www.github.com/davidrekow/t-coffee) includes formatting via `|` syntax, and can use custom registered formatters. `t+` also provides optional DOM binding & rendering.
+ [`t+.coffee`](http://www.github.com/davidrekow/t-coffee) is the [`Handlebars`](https://github.com/wycats/handlebars.js) to [`t.coffee's`](http://www.github.com/davidrekow/t.coffee) [`Mustache`](http://mustache.github.com/).
 
 ### Features
 `t.js`
@@ -24,6 +24,15 @@
 
  * Scoped object/array iteration: `{{>obj}}{{=name}}, {{=age}}, {{=city}} {{/obj}}`
  * Space-agnostic parsing `{{=var}}` or `{{= var }}`
+
+`t+.coffee`
+
+ * Macros: `{{+macro(param1, param2...)}}`, must be registered first: `t.macro(name, fn)`
+ * Includes/partials: `{{&partial}}`
+ * Extends, with named blocks: `{{^parentTemplate}}{{$block1}}content{{/$block1}}, {{$block2}}content 2{{$/block}}`
+ * Simple template management via `t.register(name, stringTemplateOrT)` and `t.load(name)`
+ * Optional DOM binding/insertion: `t.bind($('#el')); t.render(vars);` -> updates `$('#el')` and caches previous element at `t._previousElement`
+   * Single-step rollback using `t.undo()`
 
 ### How to use
 

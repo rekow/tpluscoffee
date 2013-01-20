@@ -1,68 +1,117 @@
 ###
-     _             __  __
-    | |_   __ ___ / _|/ _|___ ___
-    |  _|_/ _/ _ \  _|  _/ -_) -_)
-     \__(_)__\___/_| |_| \___\___|
 
-  t.coffee - CoffeeScript port of t.js,
-    a micro-templating framework in ~400 bytes gzipped
+     _      _            __  __
+    | |_  _| |_  __ ___ / _|/ _|___ ___
+    |  _||_   _|/ _/ _ \  _|  _/ -_) -_)
+     \__|  |_|(_)__\___/_| |_| \___\___|
 
-  @author  Jason Mooberry <jasonmoo@me.com> (ported by David Rekow <david at davidrekow.com>)
+  t+.coffee - extends t.js with compilation, named blocks,
+              includes and extends via simple template loading.
+
+  @author  David Rekow <david at davidrekow.com>
   @license MIT
-  @version 0.1.3
+  @version 0.0.1
 ###
+t = @t
+@t = do (t) ->
 
-blockregex = /\{\{\s*?(([@!>]?)(.+?))\s*?\}\}(([\s\S]+?)(\{\{\s*?:\1\s*?\}\}([\s\S]+?))?)\{\{\s*?\/(?:\1|\s*?\3\s*?)\s*?\}\}/g
-valregex = /\{\{\s*?([=%])\s*?(.+?)\s*?\}\}/g
+  include = /\{\{\s*?\&\s*?([^\s]+?)\s*?\}\}/g
+  extend = /^\{\{\s*?\^\s*?([^\s]+?)\s*?\}\}([.\s\S]*)/g
+  macro = /\{\{\s*?\+\s*?([^\(]+)\(([^\)]+)\)\s*?\}\}/
+  blocks = /\{\{\s*?(\$\s*?([^\s]+?))\}\}([\s\S.]+)\{\{\s*?\/\s*?(?:\1|\2)\}\}/g
 
-t = (template) ->
-  @t = template
-  return
+  triml = /^\s+/
+  trimr = /\s+$/
 
-scrub = (val) ->
-  return new Option(val).innerHTML.replace(/["']/g, '&quot;')
+  templates = {}
+  macros = {}
 
-get_value = (vars, key) ->
-  parts = key.split('.')
+  _render = t::render
 
-  while parts.length
-    return false if parts[0] not of vars
-    vars = vars[parts.shift()]
+  trim = (str) ->
+    return str.replace(triml, '').replace(trimr, '')
 
-  return vars
+  parse = (tpl, vars) ->
+    _t = tpl.t
+    html = _render.call(preprocess(tpl, vars), vars)
+    tpl.t = _t
 
-render = (fragment, vars) ->
-  if not vars?
-    vars = fragment
-    fragment = @t
+    return html
 
-  return fragment.replace(blockregex, (_, __, meta, key, inner, if_true, has_else, if_false) ->
-    val = get_value(vars, key)
-    temp = ''
+  preprocess = (tpl, vars) ->
+    src = tpl.t
 
-    if not val
-      return (if meta is '!' then render(inner, vars) else (if has_else then render(if_false, vars) else ''))
+    tpl.t = src.replace extend, (_, name, rest) ->
+      _blocks = {}
+      parent = tpl.load(name)
 
-    if not meta
-      return (if has_else then render(if_true) else render(inner, vars))
+      if parent
+        rest.replace blocks, (_, __, name, inner) ->
+          _blocks[name] = inner
+          return _
 
-    if meta is '@'
-      for k, v of val
-        if val.hasOwnProperty(k)
-          temp += render(inner, {_key: k, _val: v})
+        return parent.t.replace blocks, (_, __, name, _default) ->
+          block = _blocks[name]
+          delete _blocks[name]
+          return block or _default
 
-    if meta is '>'
-      if Array.isArray(val)
-        temp += render(inner, item) for item in val
-      else temp += render(inner, val)
+      else
+        return rest.replace blocks, (_, __, name, inner) ->
+          return inner
 
-    return temp
-  ).replace(valregex, (_, meta, key) ->
-    val = get_value(vars, key)
-    return (if val? then (if meta is '%' then scrub(val) else val) else '')
-  )
+    .replace include, (_, name) ->
+      child = tpl.load(name)
+      return child.t or ''
 
-t::render = (vars) ->
-  return render(@t, vars)
+    .replace macro, (_, name, params) ->
+      _params = params.split(',')
+      params = []
+      for param in _params
+        params.push(vars[trim(param)])
 
-window.t = t
+      _macro = macros[name]
+      return if _macro then _macro.apply(null, params) else ''
+
+    return (if include.test(tpl.t) or macro.test(tpl.t) then preprocess(tpl, vars) else tpl)
+
+  render = (html, tpl) ->
+    el = tpl._element
+    return html if not el
+
+    env = document.createElement('div')
+    env.appendChild(el.cloneNode(false))
+    env.firstChild.outerHTML = html
+
+    tpl._element = newEl = env.firstChild
+    tpl._previousElement = el.parentNode.replaceChild(newEl, el)
+
+    return tpl
+
+  t::bind = (el) ->
+    @_element = el if el and el.nodeType
+    @_previousElement = null
+    return @
+
+  t::load = (name) ->
+    return templates[name]
+
+  t::macro = (name, fn) ->
+    macros[name] = fn if fn
+    return macros[name]
+
+  t::parse = (vars) ->
+    return parse @, vars
+
+  t::register = (name, tpl) ->
+    tpl = if tpl.t then tpl else new @constructor(tpl)
+    templates[name] = tpl
+    return tpl
+
+  t::render = (vars) ->
+    html = if vars.charAt then vars else @parse(vars)
+    return render(html, @)
+
+  t::undo = () ->
+    @render(@_previousElement.outerHTML)
+
+  return t
