@@ -30,7 +30,7 @@
  * Includes/partials: `{{&partial}}`, rendered in current context
  * Extends, with named blocks: `{{^parentTemplate}}{{$block1}}content{{/block1}} {{$block2}}content 2{{/block2}}`
    * Extend block `{{^<name>}}` must be first block in template
-   * Content between blocks will be ignored
+   * Content between blocks in extending template will be ignored
  * Simple template management via `t.register(name, stringTemplateOrT)` and `t.load(name)`
    * Can set custom load & register functions to manage templates elsewhere, via `t.setLoader(fn)` and `t.setRegister(fn)`. Register functions should expect incoming `(name, stringTemplateOrT)`, while loader functions should accept a string `name`.
  * Optional DOM binding/insertion: `t.bind(element); t.render(vars);` -> updates `element` at `t._element` and caches previous element at `t._previousElement`
