@@ -12,7 +12,7 @@
 
   @author  David Rekow <david at davidrekow.com>
   @license MIT
-  @version 0.0.1
+  @version 0.0.2
 */
 
 
@@ -22,18 +22,47 @@
   t = this.t;
 
   this.t = (function(t) {
-    var blocks, extend, include, macro, macros, parse, preprocess, render, templates, trim, triml, trimr, _render;
+    var blocks, compile, extend, include, load, macro, macros, parse, preprocess, register, render, setLoader, setRegister, templates, toMacro, trim, triml, trimr, _render;
     include = /\{\{\s*?\&\s*?([^\s]+?)\s*?\}\}/g;
     extend = /^\{\{\s*?\^\s*?([^\s]+?)\s*?\}\}([.\s\S]*)/g;
     macro = /\{\{\s*?\+\s*?([^\(]+)\(([^\)]+)\)\s*?\}\}/g;
-    blocks = /\{\{\s*?(\$\s*?([^\s]+?))\}\}([\s\S.]+)\{\{\s*?\/\s*?(?:\1|\2)\}\}/g;
+    blocks = /\{\{\s*?(\$\s*?([^\(]+){1})([\w\s,\(\)]*)\s*?\}\}([\s\S.]+)\{\{\s*?\/\s*?(?:\1|\2)\}\}/g;
     triml = /^\s+/;
     trimr = /\s+$/;
     templates = {};
     macros = {};
     _render = t.prototype.render;
+    load = register = null;
+    t.prototype.customLoader = false;
+    t.prototype.customRegister = false;
+    toMacro = function(vars, params, inner) {
+      var id, name;
+      if (params == null) {
+        params = '';
+      }
+      if (params.charAt(0) === '(' && params.charAt(params.length - 1) === ')') {
+        params = params.slice(1, params.length - 1);
+      }
+      params = trim(params.split(','));
+      name = params.shift();
+      id = btoa((+(new Date)).toString(16));
+      vars[id] = function() {
+        return inner;
+      };
+      params.push(id);
+      return '{{+' + name + '(' + params.join(',') + ')}}';
+    };
     trim = function(str) {
-      return str.replace(triml, '').replace(trimr, '');
+      var i, s, _i, _len;
+      if (str.charAt) {
+        str = str.replace(triml, '').replace(trimr, '');
+      } else if (str.length) {
+        for (i = _i = 0, _len = str.length; _i < _len; i = ++_i) {
+          s = str[i];
+          str[i] = trim(s);
+        }
+      }
+      return str;
     };
     parse = function(tpl, vars) {
       var html, _t;
@@ -50,19 +79,25 @@
         _blocks = {};
         parent = tpl.load(name);
         if (parent) {
-          rest.replace(blocks, function(_, __, name, inner) {
+          rest.replace(blocks, function(_, __, name, params, inner) {
+            if (name === 'call') {
+              return toMacro(vars, params, inner);
+            }
             _blocks[name] = inner;
             return _;
           });
-          return parent.t.replace(blocks, function(_, __, name, _default) {
+          return parent.t.replace(blocks, function(_, __, name, params, _default) {
             var block;
+            if (name === 'call') {
+              return toMacro(vars, params, _default);
+            }
             block = _blocks[name];
             delete _blocks[name];
             return block || _default;
           });
         } else {
-          return rest.replace(blocks, function(_, __, name, inner) {
-            return inner;
+          return rest.replace(blocks, function(_, __, name, params, inner) {
+            return (name === 'call' ? toMacro(vars, params, inner) : inner);
           });
         }
       }).replace(include, function(_, name) {
@@ -70,7 +105,7 @@
         child = tpl.load(name);
         return child.t || '';
       }).replace(macro, function(_, name, params) {
-        var param, _i, _len, _macro, _params;
+        var param, _def, _i, _len, _macro, _params;
         _params = params.split(',');
         params = [];
         for (_i = 0, _len = _params.length; _i < _len; _i++) {
@@ -78,13 +113,23 @@
           params.push(vars[trim(param)]);
         }
         _macro = macros[name];
+        _def = params.pop();
         if (_macro) {
-          return _macro.apply(null, params);
-        } else {
-          return '';
+          try {
+            return _macro.apply(null, params);
+          } catch (e) {
+            console.error(e);
+          }
         }
+        if (_def && typeof _def === 'function') {
+          return _def();
+        }
+        return '';
       });
       return (include.test(tpl.t) || macro.test(tpl.t) ? preprocess(tpl, vars) : tpl);
+    };
+    compile = function(tpl) {
+      return tpl;
     };
     render = function(html, tpl) {
       var el, env, newEl;
@@ -99,6 +144,40 @@
       tpl._previousElement = el.parentNode.replaceChild(newEl, el);
       return tpl;
     };
+    setLoader = function(fn) {
+      if (fn && typeof fn === 'function') {
+        load = t.prototype.load;
+        t.prototype.load = fn;
+        t.prototype.customLoader = true;
+      }
+    };
+    setRegister = function(fn) {
+      if (fn && typeof fn === 'function') {
+        register = t.prototype.register;
+        t.prototype.register = fn;
+        t.prototype.customRegister = true;
+        if (templates) {
+          new t('').register(templates);
+          templates = false;
+        }
+      }
+    };
+    t.prototype.load = function(name) {
+      return templates[name];
+    };
+    t.prototype.setLoader = function(fn) {
+      setLoader(fn);
+      return this;
+    };
+    t.prototype.register = function(name, tpl) {
+      tpl = tpl.t ? tpl : new this.constructor(tpl);
+      templates[name] = tpl;
+      return tpl;
+    };
+    t.prototype.setRegister = function(fn) {
+      setRegister(fn);
+      return this;
+    };
     t.prototype.bind = function(el) {
       if (el && el.nodeType) {
         this._element = el;
@@ -106,22 +185,8 @@
       this._previousElement = null;
       return this;
     };
-    t.prototype.load = function(name) {
-      return templates[name];
-    };
-    t.prototype.macro = function(name, fn) {
-      if (fn) {
-        macros[name] = fn;
-      }
-      return macros[name];
-    };
     t.prototype.parse = function(vars) {
       return parse(this, vars);
-    };
-    t.prototype.register = function(name, tpl) {
-      tpl = tpl.t ? tpl : new this.constructor(tpl);
-      templates[name] = tpl;
-      return tpl;
     };
     t.prototype.render = function(vars) {
       var html;
@@ -132,6 +197,12 @@
       if (this._previousElement) {
         return this.render(this._previousElement.outerHTML);
       }
+    };
+    t.prototype.macro = function(name, fn) {
+      if (fn) {
+        macros[name] = fn;
+      }
+      return macros[name];
     };
     return t;
   })(t);

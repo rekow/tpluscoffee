@@ -27,13 +27,31 @@
 
 `t+.coffee`
 
- * Macros: `{{+macro(param1, param2...)}}`, must be registered first: `t.macro(name, fn)`
- * Includes/partials: `{{&partial}}`
- * Extends, with named blocks: `{{^parentTemplate}}{{$block1}}content{{/$block1}}, {{$block2}}content 2{{$/block}}`
-   * Caveat: extend block must be first block in template
+ * Includes/partials: `{{&partial}}`, rendered in current context
+ * Extends, with named blocks: `{{^parentTemplate}}{{$block1}}content{{/block1}} {{$block2}}content 2{{/block2}}`
+   * Extend block `{{^<name>}}` must be first block in template
+   * Content between blocks will be ignored
  * Simple template management via `t.register(name, stringTemplateOrT)` and `t.load(name)`
+   * Can set custom load & register functions to manage templates elsewhere, via `t.setLoader(fn)` and `t.setRegister(fn)`. Register functions should expect incoming `(name, stringTemplateOrT)`, while loader functions should accept a string `name`.
  * Optional DOM binding/insertion: `t.bind(element); t.render(vars);` -> updates `element` at `t._element` and caches previous element at `t._previousElement`
    * Single-step rollback using `t.undo()`
+ * Macros two ways
+   * Inline: `{{+<name>(param1, param2...)}}`. If an error occurs, returns `''`.
+   * `$call` block: `{{$call(<name>, param1, param2)}}<default content>{{/call}}`. If an error occurs, returns `<default content>`.
+
+Macros must be registered first, `t.macro(name, fn)`, and can be used on the fly in JS - but remember, macros throw exceptions when invoked incorrectly, if you're using outside templates you should wrap in a try/catch:
+
+    # register
+    t.macro 'join', (a, b) ->
+        throw('join() requires two parameters.') if not (a and b)
+        return a + ' ' + b
+
+    t.macro('join') 'hey'   # throws an error
+
+    try
+        t.macro('join') 'hey'
+    catch e
+        console.log('Join error:', e)   # sweet
 
 Coming soon:
  * Template-to-function compilation, pre-deploy or at runtime
@@ -48,7 +66,5 @@ Then use just like [`t.js`](http://www.github.com/jasonmoo/t.js):
 
     var template = new t("<div>Hello {{=name}}</div>");
     document.body.innerHTML = template.render({name: "World!"});
-
-For more advanced usage check the `t_test.html`.
 
 This software is released under the MIT license.
