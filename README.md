@@ -43,7 +43,7 @@ Macros must be registered first, `t.macro(name, fn)`, and can be used on the fly
 
     # register
     t.macro 'join', (a, b) ->
-        throw('join() requires two parameters.') if not (a and b)
+        throw 'join() requires two parameters.' if not (a and b)
         return a + ' ' + b
 
     t.macro('join') 'hey'   # throws an error
