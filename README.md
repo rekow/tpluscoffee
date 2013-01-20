@@ -39,7 +39,7 @@
    * Inline: `{{+<name>(param1, param2...)}}`. If an error occurs, returns `''`.
    * `$call` block: `{{$call(<name>, param1, param2)}}<default content>{{/call}}`. If an error occurs, returns `<default content>`.
 
-Macros must be registered first, `t.macro(name, fn)`, and can be used on the fly in JS - but remember, macros throw exceptions when invoked incorrectly, if you're using outside templates you should wrap in a try/catch:
+Macros must be registered first, `t.macro(name, fn)`, and can be used on the fly in JS - but remember, macros should throw an error when invoked incorrectly, so if you're using them outside templates you should wrap in a try/catch:
 
     # register
     t.macro 'join', (a, b) ->
