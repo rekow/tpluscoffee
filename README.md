@@ -30,9 +30,13 @@
  * Macros: `{{+macro(param1, param2...)}}`, must be registered first: `t.macro(name, fn)`
  * Includes/partials: `{{&partial}}`
  * Extends, with named blocks: `{{^parentTemplate}}{{$block1}}content{{/$block1}}, {{$block2}}content 2{{$/block}}`
+   * Caveat: extend block must be first block in template
  * Simple template management via `t.register(name, stringTemplateOrT)` and `t.load(name)`
  * Optional DOM binding/insertion: `t.bind(element); t.render(vars);` -> updates `element` at `t._element` and caches previous element at `t._previousElement`
    * Single-step rollback using `t.undo()`
+
+Coming soon:
+ * Template-to-function compilation, pre-deploy or at runtime
 
 ### How to use
 

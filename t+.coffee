@@ -10,7 +10,7 @@
 
   @author  David Rekow <david at davidrekow.com>
   @license MIT
-  @version 0.0.1
+  @version 0.0.2
 ###
 t = @t
 @t = do (t) ->
@@ -40,7 +40,6 @@ t = @t
 
   preprocess = (tpl, vars) ->
     src = tpl.t
-
     tpl.t = src.replace extend, (_, name, rest) ->
       _blocks = {}
       parent = tpl.load(name)
@@ -73,6 +72,10 @@ t = @t
       return if _macro then _macro.apply(null, params) else ''
 
     return (if include.test(tpl.t) or macro.test(tpl.t) then preprocess(tpl, vars) else tpl)
+
+  compile = (tpl) ->
+    # coming soon: template compilation
+    return tpl
 
   render = (html, tpl) ->
     el = tpl._element
