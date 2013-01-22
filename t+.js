@@ -12,7 +12,7 @@
 
   @author  David Rekow <david at davidrekow.com>
   @license MIT
-  @version 0.0.2
+  @version 0.0.3
 */
 
 
@@ -22,36 +22,21 @@
   t = this.t;
 
   this.t = (function(t) {
-    var blocks, compile, extend, include, load, macro, macros, parse, preprocess, register, render, setLoader, setRegister, templates, toMacro, trim, triml, trimr, _render;
+    var blocks, extend, include, load, macro, macros, parse, preprocess, render, string, templates, trim, triml, trimr, _macro, _render, _t;
+    _t = t;
+    t.noConflict = function() {
+      t = _t;
+      return _t;
+    };
     include = /\{\{\s*?\&\s*?([^\s]+?)\s*?\}\}/g;
     extend = /^\{\{\s*?\^\s*?([^\s]+?)\s*?\}\}([.\s\S]*)/g;
-    macro = /\{\{\s*?\+\s*?([^\(]+)\(([^\)]+)\)\s*?\}\}/g;
-    blocks = /\{\{\s*?(\$\s*?([^\(]+){1})([\w\s,\(\)]*)\s*?\}\}([\s\S.]+)\{\{\s*?\/\s*?(?:\1|\2)\}\}/g;
+    _macro = /\{\{\s*?(\+\s*?([^\(]+))\(([^\)]*)\)?\s*?\}\}(?:([\s\S.]+)\{\{\s*?\/\s*?(?:\1|\2)\}\})?/g;
+    blocks = /\{\{\s*?(\$\s*?([\w]+))\s*?\}\}([\s\S.]+)\{\{\s*?\/\s*?(?:\1|\2)\}\}/g;
+    string = function(item) {
+      return {}.toString.call(item);
+    };
     triml = /^\s+/;
     trimr = /\s+$/;
-    templates = {};
-    macros = {};
-    _render = t.prototype.render;
-    load = register = null;
-    t.prototype.customLoader = false;
-    t.prototype.customRegister = false;
-    toMacro = function(vars, params, inner) {
-      var id, name;
-      if (params == null) {
-        params = '';
-      }
-      if (params.charAt(0) === '(' && params.charAt(params.length - 1) === ')') {
-        params = params.slice(1, params.length - 1);
-      }
-      params = trim(params.split(','));
-      name = params.shift();
-      id = btoa((+(new Date)).toString(16));
-      vars[id] = function() {
-        return inner;
-      };
-      params.push(id);
-      return '{{+' + name + '(' + params.join(',') + ')}}';
-    };
     trim = function(str) {
       var i, s, _i, _len;
       if (str.charAt) {
@@ -64,11 +49,53 @@
       }
       return str;
     };
+    templates = {};
+    load = function(name, tpl) {
+      var _name, _tpl;
+      if (!name) {
+        return templates;
+      }
+      if (typeof name === 'object') {
+        for (_name in name) {
+          _tpl = name[_name];
+          load(_name, _tpl);
+        }
+        return true;
+      }
+      if (tpl && (tpl.t || tpl.charAt)) {
+        tpl = tpl.t || new t(tpl);
+        templates[name] = tpl;
+      }
+      return templates[name];
+    };
+    macros = {};
+    macro = function(name, fn, ctx) {
+      var _fn, _name;
+      if (!name) {
+        return macros;
+      }
+      ctx = ctx || null;
+      if (typeof name === 'object') {
+        ctx = fn || ctx;
+        for (_name in name) {
+          _fn = name[_name];
+          macro(_name, _fn, ctx);
+        }
+        return true;
+      }
+      if (fn && typeof fn === 'function') {
+        macros[name] = function() {
+          return fn.apply(ctx, arguments);
+        };
+      }
+      return macros[name];
+    };
+    _render = t.prototype.render;
     parse = function(tpl, vars) {
-      var html, _t;
-      _t = tpl.t;
+      var html, __t;
+      __t = tpl.t;
       html = _render.call(preprocess(tpl, vars), vars);
-      tpl.t = _t;
+      tpl.t = __t;
       return html;
     };
     preprocess = function(tpl, vars) {
@@ -76,60 +103,48 @@
       src = tpl.t;
       tpl.t = src.replace(extend, function(_, name, rest) {
         var parent, _blocks;
-        _blocks = {};
         parent = tpl.load(name);
         if (parent) {
-          rest.replace(blocks, function(_, __, name, params, inner) {
-            if (name === 'call') {
-              return toMacro(vars, params, inner);
-            }
-            _blocks[name] = inner;
-            return _;
+          _blocks = {};
+          rest.replace(blocks, function(_, __, $name, inner) {
+            return (_blocks[$name] = inner, _);
           });
-          return parent.t.replace(blocks, function(_, __, name, params, _default) {
+          return parent.t.replace(blocks, function(_, __, $name, _default) {
             var block;
-            if (name === 'call') {
-              return toMacro(vars, params, _default);
-            }
-            block = _blocks[name];
-            delete _blocks[name];
+            block = _blocks[$name];
             return block || _default;
           });
         } else {
-          return rest.replace(blocks, function(_, __, name, params, inner) {
-            return (name === 'call' ? toMacro(vars, params, inner) : inner);
+          return rest.replace(blocks, function(_, __, $name, inner) {
+            return inner;
           });
         }
       }).replace(include, function(_, name) {
         var child;
         child = tpl.load(name);
         return child.t || '';
-      }).replace(macro, function(_, name, params) {
-        var param, _def, _i, _len, _macro, _params;
-        _params = params.split(',');
-        params = [];
-        for (_i = 0, _len = _params.length; _i < _len; _i++) {
-          param = _params[_i];
-          params.push(vars[trim(param)]);
-        }
-        _macro = macros[name];
-        _def = params.pop();
-        if (_macro) {
-          try {
-            return _macro.apply(null, params);
-          } catch (e) {
-            console.error(e);
+      }).replace(_macro, function(_, __, name, params, content) {
+        var args, m, param, _i, _len;
+        params = trim(params.split(','));
+        content = content || '';
+        m = tpl.macro(name);
+        if (m) {
+          args = [];
+          for (_i = 0, _len = params.length; _i < _len; _i++) {
+            param = params[_i];
+            args.push(vars[param]);
           }
+          try {
+            return m.apply(null, args);
+          } catch (e) {
+            console.log('[t+] Macro error:', e);
+          }
+        } else {
+          console.log('[t+] No macro found:', name);
         }
-        if (_def && typeof _def === 'function') {
-          return _def();
-        }
-        return '';
+        return content;
       });
-      return (include.test(tpl.t) || macro.test(tpl.t) ? preprocess(tpl, vars) : tpl);
-    };
-    compile = function(tpl) {
-      return tpl;
+      return (include.test(tpl.t) || _macro.test(tpl.t) ? preprocess(tpl, vars) : tpl);
     };
     render = function(html, tpl) {
       var el, env, newEl;
@@ -137,46 +152,42 @@
       if (!el) {
         return html;
       }
+      tpl = tpl.preRender(el, html);
       env = document.createElement('div');
       env.appendChild(el.cloneNode(false));
       env.firstChild.outerHTML = html;
       tpl._element = newEl = env.firstChild;
       tpl._previousElement = el.parentNode.replaceChild(newEl, el);
+      tpl = tpl.postRender(el, html);
       return tpl;
     };
-    setLoader = function(fn) {
+    t.templates = function() {
+      return load();
+    };
+    t.load = function(name) {
+      return load(name);
+    };
+    t.register = function(name, tpl) {
+      return load(name, tpl);
+    };
+    t.macro = function(name, fn) {
+      return macro(name, fn);
+    };
+    t.setPrerender = function(fn) {
       if (fn && typeof fn === 'function') {
-        load = t.prototype.load;
-        t.prototype.load = fn;
-        t.prototype.customLoader = true;
+        return t.prototype.prerender = fn;
       }
     };
-    setRegister = function(fn) {
+    t.setPostrender = function(fn) {
       if (fn && typeof fn === 'function') {
-        register = t.prototype.register;
-        t.prototype.register = fn;
-        t.prototype.customRegister = true;
-        if (templates) {
-          new t('').register(templates);
-          templates = false;
-        }
+        return t.prototype.postrender = fn;
       }
     };
     t.prototype.load = function(name) {
-      return templates[name];
-    };
-    t.prototype.setLoader = function(fn) {
-      setLoader(fn);
-      return this;
+      return t.load(name);
     };
     t.prototype.register = function(name, tpl) {
-      tpl = tpl.t ? tpl : new this.constructor(tpl);
-      templates[name] = tpl;
-      return tpl;
-    };
-    t.prototype.setRegister = function(fn) {
-      setRegister(fn);
-      return this;
+      return t.register(name, tpl);
     };
     t.prototype.bind = function(el) {
       if (el && el.nodeType) {
@@ -190,8 +201,31 @@
     };
     t.prototype.render = function(vars) {
       var html;
+      vars = vars || {};
       html = vars.charAt ? vars : this.parse(vars);
       return render(html, this);
+    };
+    t.prototype.prerender = function(el, html, tpl) {
+      return tpl;
+    };
+    t.prototype.postrender = function(el, html, tpl) {
+      return tpl;
+    };
+    t.prototype.setPrerender = function(fn) {
+      var _this = this;
+      if (fn && typeof fn === 'function') {
+        return this.prerender = function() {
+          return fn.apply(_this, arguments);
+        };
+      }
+    };
+    t.prototype.setPostrender = function(fn) {
+      var _this = this;
+      if (fn && typeof fn === 'function') {
+        return this.prerender = function() {
+          return fn.apply(_this, arguments);
+        };
+      }
     };
     t.prototype.undo = function() {
       if (this._previousElement) {
@@ -199,10 +233,7 @@
       }
     };
     t.prototype.macro = function(name, fn) {
-      if (fn) {
-        macros[name] = fn;
-      }
-      return macros[name];
+      return t.macro(name, fn);
     };
     return t;
   })(t);

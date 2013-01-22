@@ -10,42 +10,24 @@
 
   @author  David Rekow <david at davidrekow.com>
   @license MIT
-  @version 0.0.2
+  @version 0.0.3
 ###
 t = @t
 @t = do (t) ->
 
+  _t = t
+  t.noConflict = -> (t = _t; _t)
+
   include = /\{\{\s*?\&\s*?([^\s]+?)\s*?\}\}/g
   extend = /^\{\{\s*?\^\s*?([^\s]+?)\s*?\}\}([.\s\S]*)/g
-  macro = /\{\{\s*?\+\s*?([^\(]+)\(([^\)]+)\)\s*?\}\}/g
-  blocks = /\{\{\s*?(\$\s*?([^\(]+){1})([\w\s,\(\)]*)\s*?\}\}([\s\S.]+)\{\{\s*?\/\s*?(?:\1|\2)\}\}/g
+  _macro = /\{\{\s*?(\+\s*?([^\(]+))\(([^\)]*)\)?\s*?\}\}(?:([\s\S.]+)\{\{\s*?\/\s*?(?:\1|\2)\}\})?/g
+  blocks = /\{\{\s*?(\$\s*?([\w]+))\s*?\}\}([\s\S.]+)\{\{\s*?\/\s*?(?:\1|\2)\}\}/g
+
+  string = (item) ->
+    return ({}).toString.call(item)
 
   triml = /^\s+/
   trimr = /\s+$/
-
-  templates = {}
-  macros = {}
-
-  _render = t::render
-
-  load = register = null
-  t::customLoader = false
-  t::customRegister = false
-
-  toMacro = (vars, params='', inner) ->
-    if params.charAt(0) is '(' and params.charAt(params.length-1) is ')'
-      params = params.slice(1, params.length-1)
-    params = trim(params.split(','))
-    name = params.shift()
-
-    # add default content callable
-    id = btoa((+new Date).toString(16))
-    vars[id] = ->
-      return inner
-    params.push(id)
-
-    return '{{+' + name + '(' + params.join(',') + ')}}'
-
   trim = (str) ->
     if str.charAt
       str = str.replace(triml, '').replace(trimr, '')
@@ -53,63 +35,83 @@ t = @t
       str[i] = trim(s) for s, i in str
     return str
 
-  parse = (tpl, vars) ->
-    _t = tpl.t
-    html = _render.call(preprocess(tpl, vars), vars)
-    tpl.t = _t
+  templates = {}
+  load = (name, tpl) ->
+    return templates if not name
+    if typeof name is 'object'
+      load(_name, _tpl) for _name, _tpl of name
+      return true
 
+    if tpl and (tpl.t or tpl.charAt)
+      tpl = tpl.t or new t(tpl)
+      templates[name] = tpl
+
+    return templates[name]
+
+  macros = {}
+  macro = (name, fn, ctx) ->
+    return macros if not name
+    ctx = ctx or null
+    if typeof name is 'object'
+      ctx = fn or ctx
+      macro(_name, _fn, ctx) for _name, _fn of name
+      return true
+
+    if fn and typeof fn is 'function'
+      macros[name] = () ->
+        return fn.apply(ctx, arguments)
+
+    return macros[name]
+
+  _render = t::render
+  parse = (tpl, vars) ->
+    __t = tpl.t
+    html = _render.call(preprocess(tpl, vars), vars)
+    tpl.t = __t
     return html
 
   preprocess = (tpl, vars) ->
     src = tpl.t
     tpl.t = src.replace extend, (_, name, rest) ->
-      _blocks = {}
       parent = tpl.load(name)
-
       if parent
-        rest.replace blocks, (_, __, name, params, inner) ->
-          return toMacro(vars, params, inner) if name is 'call'
-          _blocks[name] = inner
-          return _
+        _blocks = {}
+        rest.replace blocks, (_, __, $name, inner) ->
+          return (_blocks[$name] = inner; _)
 
-        return parent.t.replace blocks, (_, __, name, params, _default) ->
-          return toMacro(vars, params, _default) if name is 'call'
-          block = _blocks[name]
-          delete _blocks[name]
+        return parent.t.replace blocks, (_, __, $name, _default) ->
+          block = _blocks[$name]
           return block or _default
 
-      else return rest.replace blocks, (_, __, name, params, inner) ->
-        return (if name is 'call' then toMacro(vars, params, inner) else inner)
+      else return rest.replace blocks, (_, __, $name, inner) ->
+        return inner
 
     .replace include, (_, name) ->
       child = tpl.load(name)
       return child.t or ''
 
-    .replace macro, (_, name, params) ->
-      _params = params.split(',')
-      params = []
-      for param in _params
-        params.push(vars[trim(param)])
+    .replace _macro, (_, __, name, params, content) ->
+      params = trim(params.split(','))
+      content = content or ''
 
-      _macro = macros[name]
-      _def = params.pop()
-
-      if _macro
-        try return _macro.apply(null, params)
+      m = tpl.macro(name)
+      if m
+        args = []
+        args.push(vars[param]) for param in params
+        try return m.apply(null, args)
         catch e
-          console.error(e)
-      if _def and typeof _def is 'function'
-        return _def()
-      return ''
+          console.log('[t+] Macro error:', e)
 
-    return (if include.test(tpl.t) or macro.test(tpl.t) then preprocess(tpl, vars) else tpl)
+      else console.log('[t+] No macro found:', name)
+      return content
 
-  compile = (tpl) ->
-    return tpl
+    return (if include.test(tpl.t) or _macro.test(tpl.t) then preprocess(tpl, vars) else tpl)
 
   render = (html, tpl) ->
     el = tpl._element
     return html if not el
+
+    tpl = tpl.preRender(el, html)
 
     env = document.createElement('div')
     env.appendChild(el.cloneNode(false))
@@ -118,40 +120,32 @@ t = @t
     tpl._element = newEl = env.firstChild
     tpl._previousElement = el.parentNode.replaceChild(newEl, el)
 
+    tpl = tpl.postRender(el, html)
     return tpl
 
-  setLoader = (fn) ->
-    if fn and typeof fn is 'function'
-      load = t::load
-      t::load = fn
-      t::customLoader = true
-    return
+  t.templates = ->
+    return load()
 
-  setRegister = (fn) ->
-    if fn and typeof fn is 'function'
-      register = t::register
-      t::register = fn
-      t::customRegister = true
-      if templates
-        new t('').register(templates)
-        templates = false
-    return
+  t.load = (name) ->
+    return load(name)
+
+  t.register = (name, tpl) ->
+    return load(name, tpl)
+
+  t.macro = (name, fn) ->
+    return macro(name, fn)
+
+  t.setPrerender = (fn) ->
+    t::prerender = fn if fn and typeof fn is 'function'
+
+  t.setPostrender = (fn) ->
+    t::postrender = fn if fn and typeof fn is 'function'
 
   t::load = (name) ->
-    return templates[name]
-
-  t::setLoader = (fn) ->
-    setLoader(fn)
-    return @
+    return t.load(name)
 
   t::register = (name, tpl) ->
-    tpl = if tpl.t then tpl else new @constructor(tpl)
-    templates[name] = tpl
-    return tpl
-
-  t::setRegister = (fn) ->
-    setRegister(fn)
-    return @
+    return t.register(name, tpl)
 
   t::bind = (el) ->
     @_element = el if el and el.nodeType
@@ -162,14 +156,26 @@ t = @t
     return parse @, vars
 
   t::render = (vars) ->
+    vars = vars or {}
     html = if vars.charAt then vars else @parse(vars)
-    return render(html, @)
+    return render html, @
+
+  t::prerender = (el, html, tpl) -> tpl
+  t::postrender = (el, html, tpl) -> tpl
+
+  t::setPrerender = (fn) ->
+    if fn and typeof fn is 'function'
+      @prerender = () =>
+        return fn.apply @, arguments
+  t::setPostrender = (fn) ->
+    if fn and typeof fn is 'function'
+      @prerender = () =>
+        return fn.apply @, arguments
 
   t::undo = () ->
     @render(@_previousElement.outerHTML) if @_previousElement
 
   t::macro = (name, fn) ->
-    macros[name] = fn if fn
-    return macros[name]
+    return t.macro(name, fn)
 
   return t
