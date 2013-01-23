@@ -70,21 +70,26 @@ t = @t
   parsed = {}
   parse = (tpl, vars) ->
     src = tpl.t
-    tpl.t = parsed[tpl.name] or src.replace extend, (_, name, rest) ->
-      parent = tpl.load(name)
-      if parent
-        _blocks = {}
-        rest.replace blocks, (_, __, $name, inner) ->
-          return (_blocks[$name] = inner; _)
 
-        return parent.t.replace blocks, (_, __, $name, _default) ->
-          block = _blocks[$name]
-          return block or _default
+    if parsed[tpl.name]
+      tpl.t = parsed[tpl.name]
 
-      else return rest.replace blocks, (_, __, $name, inner) ->
-        return inner
+    else
+      tpl.t = src.replace extend, (_, name, rest) ->
+        parent = tpl.load(name)
+        if parent
+          _blocks = {}
+          rest.replace blocks, (_, __, $name, inner) ->
+            return (_blocks[$name] = inner; _)
 
-    parsed[tpl.name] = tpl.t = include(tpl)
+          return parent.t.replace blocks, (_, __, $name, _default) ->
+            block = _blocks[$name]
+            return block or _default
+
+        else return rest.replace blocks, (_, __, $name, inner) ->
+          return inner
+
+      parsed[tpl.name] = tpl.t = include(tpl)
 
     html = render.call(tpl, vars).replace _macro, (_, __, name, params, content) ->
       params = trim(params.split(','))
