@@ -22,7 +22,7 @@
   t = this.t;
 
   this.t = (function(t) {
-    var blocks, extend, include, load, macro, macros, parse, parsed, partial, render, string, templates, trim, triml, trimr, _macro, _t;
+    var blocks, extend, include, load, macro, macros, parse, parsed, partial, render, templates, trim, triml, trimr, _macro, _t;
     _t = t;
     render = t.prototype.render;
     t.noConflict = function() {
@@ -33,9 +33,6 @@
     extend = /^\{\{\s*?\^\s*?([^\s]+?)\s*?\}\}([.\s\S]*)/g;
     _macro = /\{\{\s*?(\+\s*?([^\(]+))\(([^\)]*)\)\s*?\}\}(?:([\s\S.]+)\{\{\s*?\/\s*?(?:\1|\2)\}\})?/g;
     blocks = /\{\{\s*?(#\s*?([\w]+))\s*?\}\}([\s\S.]+)\{\{\s*?\/\s*?(?:\1|\2)\}\}/g;
-    string = function(item) {
-      return {}.toString.call(item);
-    };
     triml = /^\s+/;
     trimr = /\s+$/;
     trim = function(str) {
@@ -101,26 +98,30 @@
     parse = function(tpl, vars) {
       var el, html, src;
       src = tpl.t;
-      tpl.t = parsed[tpl.name] || src.replace(extend, function(_, name, rest) {
-        var parent, _blocks;
-        parent = tpl.load(name);
-        if (parent) {
-          _blocks = {};
-          rest.replace(blocks, function(_, __, $name, inner) {
-            return (_blocks[$name] = inner, _);
-          });
-          return parent.t.replace(blocks, function(_, __, $name, _default) {
-            var block;
-            block = _blocks[$name];
-            return block || _default;
-          });
-        } else {
-          return rest.replace(blocks, function(_, __, $name, inner) {
-            return inner;
-          });
-        }
-      });
-      parsed[tpl.name] = tpl.t = include(tpl);
+      if (parsed[tpl.name]) {
+        tpl.t = parsed[tpl.name];
+      } else {
+        tpl.t = src.replace(extend, function(_, name, rest) {
+          var parent, _blocks;
+          parent = tpl.load(name);
+          if (parent) {
+            _blocks = {};
+            rest.replace(blocks, function(_, __, $name, inner) {
+              return (_blocks[$name] = inner, _);
+            });
+            return parent.t.replace(blocks, function(_, __, $name, _default) {
+              var block;
+              block = _blocks[$name];
+              return block || _default;
+            });
+          } else {
+            return rest.replace(blocks, function(_, __, $name, inner) {
+              return inner;
+            });
+          }
+        });
+        parsed[tpl.name] = tpl.t = include(tpl);
+      }
       html = render.call(tpl, vars).replace(_macro, function(_, __, name, params, content) {
         var args, m, param, _i, _len;
         params = trim(params.split(','));
@@ -183,18 +184,6 @@
       return cb();
     };
     t.prototype.postrender = function() {};
-    t.prototype.setPrerender = function(fn) {
-      if (fn && typeof fn === 'function') {
-        this.prerender = fn;
-      }
-      return this;
-    };
-    t.prototype.setPostrender = function(fn) {
-      if (fn && typeof fn === 'function') {
-        this.postrender = fn;
-      }
-      return this;
-    };
     return t;
   })(t);
 

@@ -141,15 +141,10 @@ t = @t
   t::render = (vars) ->
     return parse @, vars
 
+  # Fallbacks only to prevent errors.
+  # Overwrite with custom logic (animation, etc)
+  # at the instance level.
   t::prerender = (el, html, cb) -> cb()
   t::postrender = () ->
-
-  t::setPrerender = (fn) ->
-    @prerender = fn if fn and typeof fn is 'function'
-    return @
-
-  t::setPostrender = (fn) ->
-    @postrender = fn if fn and typeof fn is 'function'
-    return @
 
   return t
