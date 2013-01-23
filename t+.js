@@ -22,16 +22,17 @@
   t = this.t;
 
   this.t = (function(t) {
-    var blocks, extend, include, load, macro, macros, parse, preprocess, render, string, templates, trim, triml, trimr, _macro, _render, _t;
+    var blocks, extend, include, load, macro, macros, parse, parsed, partial, render, string, templates, trim, triml, trimr, _macro, _t;
     _t = t;
+    render = t.prototype.render;
     t.noConflict = function() {
       t = _t;
       return _t;
     };
-    include = /\{\{\s*?\&\s*?([^\s]+?)\s*?\}\}/g;
+    partial = /\{\{\s*?\&\s*?([^\s]+?)\s*?\}\}/g;
     extend = /^\{\{\s*?\^\s*?([^\s]+?)\s*?\}\}([.\s\S]*)/g;
-    _macro = /\{\{\s*?(\+\s*?([^\(]+))\(([^\)]*)\)?\s*?\}\}(?:([\s\S.]+)\{\{\s*?\/\s*?(?:\1|\2)\}\})?/g;
-    blocks = /\{\{\s*?(\$\s*?([\w]+))\s*?\}\}([\s\S.]+)\{\{\s*?\/\s*?(?:\1|\2)\}\}/g;
+    _macro = /\{\{\s*?(\+\s*?([^\(]+))\(([^\)]*)\)\s*?\}\}(?:([\s\S.]+)\{\{\s*?\/\s*?(?:\1|\2)\}\})?/g;
+    blocks = /\{\{\s*?(#\s*?([\w]+))\s*?\}\}([\s\S.]+)\{\{\s*?\/\s*?(?:\1|\2)\}\}/g;
     string = function(item) {
       return {}.toString.call(item);
     };
@@ -64,6 +65,7 @@
       }
       if (tpl && (tpl.t || tpl.charAt)) {
         tpl = tpl.t || new t(tpl);
+        tpl.name = name;
         templates[name] = tpl;
       }
       return templates[name];
@@ -90,18 +92,16 @@
       }
       return macros[name];
     };
-    _render = t.prototype.render;
-    parse = function(tpl, vars) {
-      var html, __t;
-      __t = tpl.t;
-      html = _render.call(preprocess(tpl, vars), vars);
-      tpl.t = __t;
-      return html;
+    include = function(tpl) {
+      return tpl.t.replace(partial, function(_, name) {
+        return include(tpl.load(name));
+      });
     };
-    preprocess = function(tpl, vars) {
-      var src;
+    parsed = {};
+    parse = function(tpl, vars) {
+      var el, html, src;
       src = tpl.t;
-      tpl.t = src.replace(extend, function(_, name, rest) {
+      tpl.t = parsed[tpl.name] || src.replace(extend, function(_, name, rest) {
         var parent, _blocks;
         parent = tpl.load(name);
         if (parent) {
@@ -119,11 +119,9 @@
             return inner;
           });
         }
-      }).replace(include, function(_, name) {
-        var child;
-        child = tpl.load(name);
-        return child.t || '';
-      }).replace(_macro, function(_, __, name, params, content) {
+      });
+      parsed[tpl.name] = tpl.t = include(tpl);
+      html = render.call(tpl, vars).replace(_macro, function(_, __, name, params, content) {
         var args, m, param, _i, _len;
         params = trim(params.split(','));
         content = content || '';
@@ -144,50 +142,32 @@
         }
         return content;
       });
-      return (include.test(tpl.t) || _macro.test(tpl.t) ? preprocess(tpl, vars) : tpl);
-    };
-    render = function(html, tpl) {
-      var el, env, newEl;
-      el = tpl._element;
-      if (!el) {
+      tpl.t = src;
+      if (!tpl._element) {
         return html;
       }
-      tpl = tpl.preRender(el, html);
-      env = document.createElement('div');
-      env.appendChild(el.cloneNode(false));
-      env.firstChild.outerHTML = html;
-      tpl._element = newEl = env.firstChild;
-      tpl._previousElement = el.parentNode.replaceChild(newEl, el);
-      tpl = tpl.postRender(el, html);
-      return tpl;
+      el = tpl._element;
+      return tpl.prerender(el, html, function() {
+        var env, newEl;
+        env = document.createElement('div');
+        env.appendChild(el.cloneNode(false));
+        env.firstChild.outerHTML = html;
+        tpl._element = newEl = env.firstChild;
+        tpl._previousElement = el.parentNode.replaceChild(newEl, el);
+        return tpl.postrender(el);
+      });
     };
-    t.templates = function() {
-      return load();
-    };
-    t.load = function(name) {
+    t.load = t.prototype.load = function(name) {
       return load(name);
     };
-    t.register = function(name, tpl) {
+    t.register = t.prototype.register = function(name, tpl) {
       return load(name, tpl);
     };
-    t.macro = function(name, fn) {
+    t.macro = t.prototype.macro = function(name, fn) {
       return macro(name, fn);
     };
-    t.setPrerender = function(fn) {
-      if (fn && typeof fn === 'function') {
-        return t.prototype.prerender = fn;
-      }
-    };
-    t.setPostrender = function(fn) {
-      if (fn && typeof fn === 'function') {
-        return t.prototype.postrender = fn;
-      }
-    };
-    t.prototype.load = function(name) {
-      return t.load(name);
-    };
-    t.prototype.register = function(name, tpl) {
-      return t.register(name, tpl);
+    t.parsed = function(name) {
+      return parsed[name];
     };
     t.prototype.bind = function(el) {
       if (el && el.nodeType) {
@@ -196,44 +176,24 @@
       this._previousElement = null;
       return this;
     };
-    t.prototype.parse = function(vars) {
+    t.prototype.render = function(vars) {
       return parse(this, vars);
     };
-    t.prototype.render = function(vars) {
-      var html;
-      vars = vars || {};
-      html = vars.charAt ? vars : this.parse(vars);
-      return render(html, this);
+    t.prototype.prerender = function(el, html, cb) {
+      return cb();
     };
-    t.prototype.prerender = function(el, html, tpl) {
-      return tpl;
-    };
-    t.prototype.postrender = function(el, html, tpl) {
-      return tpl;
-    };
+    t.prototype.postrender = function() {};
     t.prototype.setPrerender = function(fn) {
-      var _this = this;
       if (fn && typeof fn === 'function') {
-        return this.prerender = function() {
-          return fn.apply(_this, arguments);
-        };
+        this.prerender = fn;
       }
+      return this;
     };
     t.prototype.setPostrender = function(fn) {
-      var _this = this;
       if (fn && typeof fn === 'function') {
-        return this.prerender = function() {
-          return fn.apply(_this, arguments);
-        };
+        this.postrender = fn;
       }
-    };
-    t.prototype.undo = function() {
-      if (this._previousElement) {
-        return this.render(this._previousElement.outerHTML);
-      }
-    };
-    t.prototype.macro = function(name, fn) {
-      return t.macro(name, fn);
+      return this;
     };
     return t;
   })(t);

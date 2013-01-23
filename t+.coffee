@@ -16,12 +16,14 @@ t = @t
 @t = do (t) ->
 
   _t = t
+  render = t::render
+
   t.noConflict = -> (t = _t; _t)
 
-  include = /\{\{\s*?\&\s*?([^\s]+?)\s*?\}\}/g
+  partial = /\{\{\s*?\&\s*?([^\s]+?)\s*?\}\}/g
   extend = /^\{\{\s*?\^\s*?([^\s]+?)\s*?\}\}([.\s\S]*)/g
   _macro = /\{\{\s*?(\+\s*?([^\(]+))\(([^\)]*)\)\s*?\}\}(?:([\s\S.]+)\{\{\s*?\/\s*?(?:\1|\2)\}\})?/g
-  blocks = /\{\{\s*?(\$\s*?([\w]+))\s*?\}\}([\s\S.]+)\{\{\s*?\/\s*?(?:\1|\2)\}\}/g
+  blocks = /\{\{\s*?(#\s*?([\w]+))\s*?\}\}([\s\S.]+)\{\{\s*?\/\s*?(?:\1|\2)\}\}/g
 
   string = (item) ->
     return ({}).toString.call(item)
@@ -44,6 +46,7 @@ t = @t
 
     if tpl and (tpl.t or tpl.charAt)
       tpl = tpl.t or new t(tpl)
+      tpl.name = name
       templates[name] = tpl
 
     return templates[name]
@@ -63,16 +66,14 @@ t = @t
 
     return macros[name]
 
-  _render = t::render
-  parse = (tpl, vars) ->
-    __t = tpl.t
-    html = _render.call(preprocess(tpl, vars), vars)
-    tpl.t = __t
-    return html
+  include = (tpl) ->
+    return tpl.t.replace partial, (_, name) ->
+      return include(tpl.load(name))
 
-  preprocess = (tpl, vars) ->
+  parsed = {}
+  parse = (tpl, vars) ->
     src = tpl.t
-    tpl.t = src.replace extend, (_, name, rest) ->
+    tpl.t = parsed[tpl.name] or src.replace extend, (_, name, rest) ->
       parent = tpl.load(name)
       if parent
         _blocks = {}
@@ -86,11 +87,9 @@ t = @t
       else return rest.replace blocks, (_, __, $name, inner) ->
         return inner
 
-    .replace include, (_, name) ->
-      child = tpl.load(name)
-      return child.t or ''
+    parsed[tpl.name] = tpl.t = include(tpl)
 
-    .replace _macro, (_, __, name, params, content) ->
+    html = render.call(tpl, vars).replace _macro, (_, __, name, params, content) ->
       params = trim(params.split(','))
       content = content or ''
 
@@ -105,77 +104,50 @@ t = @t
       else console.log('[t+] No macro found:', name)
       return content
 
-    return (if include.test(tpl.t) or _macro.test(tpl.t) then preprocess(tpl, vars) else tpl)
+    tpl.t = src
 
-  render = (html, tpl) ->
+    return html if not tpl._element
     el = tpl._element
-    return html if not el
 
-    tpl = tpl.preRender(el, html)
+    return tpl.prerender el, html, ->
+      env = document.createElement('div')
+      env.appendChild(el.cloneNode(false))
+      env.firstChild.outerHTML = html
 
-    env = document.createElement('div')
-    env.appendChild(el.cloneNode(false))
-    env.firstChild.outerHTML = html
+      tpl._element = newEl = env.firstChild
+      tpl._previousElement = el.parentNode.replaceChild(newEl, el)
 
-    tpl._element = newEl = env.firstChild
-    tpl._previousElement = el.parentNode.replaceChild(newEl, el)
+      return tpl.postrender(el)
 
-    tpl = tpl.postRender(el, html)
-    return tpl
-
-  t.templates = ->
-    return load()
-
-  t.load = (name) ->
+  t.load = t::load = (name) ->
     return load(name)
 
-  t.register = (name, tpl) ->
+  t.register = t::register = (name, tpl) ->
     return load(name, tpl)
 
-  t.macro = (name, fn) ->
+  t.macro = t::macro = (name, fn) ->
     return macro(name, fn)
 
-  t.setPrerender = (fn) ->
-    t::prerender = fn if fn and typeof fn is 'function'
-
-  t.setPostrender = (fn) ->
-    t::postrender = fn if fn and typeof fn is 'function'
-
-  t::load = (name) ->
-    return t.load(name)
-
-  t::register = (name, tpl) ->
-    return t.register(name, tpl)
+  t.parsed = (name) ->
+    return parsed[name]
 
   t::bind = (el) ->
     @_element = el if el and el.nodeType
     @_previousElement = null
     return @
 
-  t::parse = (vars) ->
+  t::render = (vars) ->
     return parse @, vars
 
-  t::render = (vars) ->
-    vars = vars or {}
-    html = if vars.charAt then vars else @parse(vars)
-    return render html, @
-
-  t::prerender = (el, html, tpl) -> tpl
-  t::postrender = (el, html, tpl) -> tpl
+  t::prerender = (el, html, cb) -> cb()
+  t::postrender = () ->
 
   t::setPrerender = (fn) ->
-    if fn and typeof fn is 'function'
-      @prerender = () =>
-        return fn.apply @, arguments
+    @prerender = fn if fn and typeof fn is 'function'
+    return @
+
   t::setPostrender = (fn) ->
-    if fn and typeof fn is 'function'
-      @prerender = () =>
-        return fn.apply @, arguments
-
-  t::undo = () ->
-    @render(@_previousElement.outerHTML) if @_previousElement
-
-  t::macro = (name, fn) ->
-    return t.macro(name, fn)
+    @postrender = fn if fn and typeof fn is 'function'
+    return @
 
   return t

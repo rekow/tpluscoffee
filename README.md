@@ -27,33 +27,26 @@
 
 `t+.coffee`
 
- * Includes/partials: `{{&partial}}`, rendered in current context
- * Extends, with named blocks: `{{^parentTemplate}}{{$block1}}content{{/block1}} {{$block2}}content 2{{/block2}}`
-   * Extend block `{{^<name>}}` must be first block in template
-   * Content between blocks in extending template will be ignored
+ * Partials & inheritance
+   * Include: `{{&<name>}}`.
+   * Extend, replacing named blocks: `{{^parent}}{{#block1}}content{{/block1}}{{#block2}}content 2{{/block2}}`
+     * Extend block `{{^<name>}}` must be first block in template
+     * Content between blocks in child template will be ignored
+   * Interpreted templates cached for fast re-render
  * Simple template management via `t.register(name, stringTemplateOrT)` and `t.load(name)`
-   * Can set custom load & register functions to manage templates elsewhere, via `t.setLoader(fn)` and `t.setRegister(fn)`. Register functions should expect incoming `(name, stringTemplateOrT)`, while loader functions should accept a string `name`.
- * Optional DOM binding/insertion: `t.bind(element); t.render(vars);` -> updates `element` at `t._element` and caches previous element at `t._previousElement`
-   * Single-step rollback using `t.undo()`
- * Macros two ways
-   * Inline: `{{+<name>(param1, param2...)}}`. If an error occurs, returns `''`.
-   * `$call` block: `{{$call(<name>, param1, param2)}}<default content>{{/call}}`. If an error occurs, returns `<default content>`.
+   * Extensible - simply overwrite `t.register` & `t.load` with your own logic and return an instance of `t`
+   * Register functions should expect `(name, stringTemplateOrT)`, while loader functions should accept `name`
+ * Optional DOM hooks
+   * Bind to an element: `t.bind(el)`. Updates `el` at `t._element` and stores previous element at `t._previousElement`
+     * Pre- and post-DOM-insert hooks: `t.setPrerender()` & `t.setPostrender()`. Prerender is handed `(el, html, callback)`, while postrender receives `el`.
+ * Macros
+   * Inline: `{{+<name>(param1, param2)}}`. If an error occurs, returns `''`.
+   * Block: `{{+<name>(param1, param2...)}} <default content> {{/<name>}}`. If an error occurs, returns `<default content>`.
+   * Must be registered first: `t.macro(name, fn)`.
 
-Macros must be registered first, `t.macro(name, fn)`, and can be used on the fly in JS - but remember, macros should throw an error when invoked incorrectly, so if you're using them outside templates you should wrap in a try/catch:
-
-    # register
-    t.macro 'join', (a, b) ->
-        throw 'join() requires two parameters.' if not (a and b)
-        return a + ' ' + b
-
-    t.macro('join') 'hey'   # throws an error
-
-    try
-        t.macro('join') 'hey'
-    catch e
-        console.log('Join error:', e)   # sweet
 
 Coming soon:
+
  * Template-to-function compilation, pre-deploy or at runtime
 
 ### How to use
