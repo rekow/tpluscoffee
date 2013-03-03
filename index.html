@@ -18,7 +18,7 @@
 <li>Content between blocks in child template will be ignored</li>
 <li>Interpreted templates cached for fast re-render</li></ul></li>
 <li>Simple template management via <code>t.put(name, template, callback)</code> and <code>t.load(name, callback)</code>
-<ul><li>Extensible - simply overwrite <code>t.put</code> &amp; <code>t.load</code> with your own logic and return an instance of <code>t</code></li>
+<ul><li>Extensible - simply overwrite <code>t.put</code> &amp; <code>t.load</code> with your own logic and pass an instance of <code>t</code> when calling 'callback'.</li>
 <li>Register functions should expect <code>(name, template, callback)</code>, while loader functions should accept <code>name</code> and pass template to <code>callback</code>.</li></ul></li>
 <li><p>Macros</p>
 
