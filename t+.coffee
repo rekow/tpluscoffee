@@ -1,150 +1,227 @@
-###
+#       _      _            __  __
+#      | |_  _| |_  __ ___ / _|/ _|___ ___
+#      |  _||_   _|/ _/ _ \  _|  _/ -_) -_)
+#       \__|  |_|(_)__\___/_| |_| \___\___|
+#
 
-     _      _            __  __
-    | |_  _| |_  __ ___ / _|/ _|___ ___
-    |  _||_   _|/ _/ _ \  _|  _/ -_) -_)
-     \__|  |_|(_)__\___/_| |_| \___\___|
+# Extends [`t.js`](https://www.github.com/jasonmoo/t.js) with inheritance, extending with named block overrides, includes (partials), and simple, extensible asynchronous template loading and parsing.
 
-  t+.coffee - extends t.js with compilation, named blocks,
-              includes and extends via simple template loading.
+# @author  David Rekow <david at davidrekow.com>
+# @license MIT
+# @version 0.1.0
 
-  @author  David Rekow <david at davidrekow.com>
-  @license MIT
-  @version 0.0.3
-###
+# Save reference to `@t` so we can overwrite.
 t = @t
+
 @t = do (t) ->
 
-  _t = t
-  render = t::render
+    # Save reference to call in `parse` so we can put our own `render` on the prototype.
+    render = t::render
 
-  t.noConflict = -> (t = _t; _t)
+    _t = t
+    t.noConflict = -> (t = _t; _t)
 
-  partial = /\{\{\s*?\&\s*?([^\s]+?)\s*?\}\}/g
-  extend = /^\{\{\s*?\^\s*?([^\s]+?)\s*?\}\}([.\s\S]*)/g
-  _macro = /\{\{\s*?(\+\s*?([^\(]+))\(([^\)]*)\)\s*?\}\}(?:([\s\S.]+)\{\{\s*?\/\s*?(?:\1|\2)\}\})?/g
-  blocks = /\{\{\s*?(#\s*?([\w]+))\s*?\}\}([\s\S.]+)\{\{\s*?\/\s*?(?:\1|\2)\}\}/g
+    # Matchers.
+    partial = /\{\{\s*?\&\s*?([^\s]+?)\s*?\}\}/g
+    extend = /^\{\{\s*?\^\s*?([^\s]+?)\s*?\}\}\n*?([.\n]*)/
+    _macro = /\{\{\s*?(\+\s*?([^\(]+))\(([^\)]*)\)\s*?\}\}(?:([\s\S.]+)\{\{\s*?\/\s*?(?:\1|\2)\}\})?/g
+    blocks = /\{\{\s*?(#\s*?([\w]+))\s*?\}\}([\s\S.]*)\{\{\s*?\/\s*?(?:\1|\2)\}\}/g
 
-  triml = /^\s+/
-  trimr = /\s+$/
-  trim = (str) ->
-    if str.charAt
-      str = str.replace(triml, '').replace(trimr, '')
-    else if str.length
-      str[i] = trim(s) for s, i in str
-    return str
+    triml = /^\s+/
+    trimr = /\s+$/
 
-  templates = {}
-  load = (name, tpl) ->
-    return templates if not name
-    if typeof name is 'object'
-      load(_name, _tpl) for _name, _tpl of name
-      return true
+    # Trims a single string or array of strings.
+    trim = (str) ->
+        if str.charAt
+            str = str.replace(triml, '').replace(trimr, '')
+        else if str.length
+            str[i] = trim(s) for s, i in str
+        return str
 
-    if tpl and (tpl.t or tpl.charAt)
-      tpl = tpl.t or new t(tpl)
-      tpl.name = name
-      templates[name] = tpl
+    # Template cache, used in default `load` method.
+    templates = {}
 
-    return templates[name]
+    # Asynchronously caches or retrieves a template. If called with no arguments, returns `templates` cache. If called with just `name` and `callback`, loads template by `name` and passes the `t` instance to `callback`. If called with `name` and `tpl` (`callback` optional), saves template `tpl` by `name` in `templates`. If overwriting `t::load` to enable your own backend, it should conform to this.
+    load = (name, tpl, callback) ->
 
-  macros = {}
-  macro = (name, fn, ctx) ->
-    return macros if not name
-    ctx = ctx or null
-    if typeof name is 'object'
-      ctx = fn or ctx
-      macro(_name, _fn, ctx) for _name, _fn of name
-      return true
+        return templates if not name
+        if not callback
+            if typeof tpl is 'function'
+                callback = tpl
+                tpl = null
+            else
+                tpl = if tpl.t then tpl else new t(tpl)
+                tpl.name = name
+                templates[name] = tpl
+                return
 
-    if fn and typeof fn is 'function'
-      macros[name] = () ->
-        return fn.apply(ctx, arguments)
+        if typeof name is 'object'
+            load(_name, _tpl) for _name, _tpl of name
+            return callback and callback()
 
-    return macros[name]
+        if name.length and name.slice and not name.split
+            len = name.length
+            results = {}
+            count = 0
 
-  include = (tpl) ->
-    return tpl.t.replace partial, (_, name) ->
-      return include(tpl.load(name))
+            for _name in name
+                load _name, (_tpl) ->
+                    results[_name] = _tpl
+                    callback and callback(results) if ++count is len
 
-  parsed = {}
-  parse = (tpl, vars) ->
-    src = tpl.t
+            return
 
-    if parsed[tpl.name]
-      tpl.t = parsed[tpl.name]
+        return callback and callback(templates[name])
 
-    else
-      tpl.t = src.replace extend, (_, name, rest) ->
-        parent = tpl.load(name)
-        if parent
-          _blocks = {}
-          rest.replace blocks, (_, __, $name, inner) ->
-            return (_blocks[$name] = inner; _)
+    # Macro cache. Macros must be registered before use, by calling `t.macro`.
+    macros = {}
 
-          return parent.t.replace blocks, (_, __, $name, _default) ->
-            block = _blocks[$name]
-            return block or _default
+    # Loads or caches a macro.
+    macro = (name, fn, ctx=null) ->
 
-        else return rest.replace blocks, (_, __, $name, inner) ->
-          return inner
+        return macros if not name
 
-      parsed[tpl.name] = tpl.t = include(tpl)
+        # Sets a hash of macros.
+        if typeof name is 'object'
+            ctx = fn or ctx
+            macro(_name, _fn, ctx) for _name, _fn of name
+            return
 
-    html = render.call(tpl, vars).replace _macro, (_, __, name, params, content) ->
-      params = trim(params.split(','))
-      content = content or ''
+        # Sets macro, binding to context `ctx`.
+        if fn and typeof fn is 'function'
+            macros[name] = ->
+                return fn.apply(ctx, arguments)
 
-      m = tpl.macro(name)
-      if m
-        args = []
-        args.push(vars[param]) for param in params
-        try return m.apply(null, args)
-        catch e
-          console.log('[t+] Macro error:', e)
+        # Return macro.
+        return macros[name]
 
-      else console.log('[t+] No macro found:', name)
-      return content
+    # Recursively loads partials asynchronously by discovering dependencies then fetching in batch.
+    includes = (tpl, vars, cb) ->
 
-    tpl.t = src
+        return false if not (tpl and vars)
+        if not cb
+            cb = vars
+            vars = {}
 
-    return html if not tpl._element
-    el = tpl._element
+        parts = []
 
-    return tpl.prerender el, html, ->
-      env = document.createElement('div')
-      env.appendChild(el.cloneNode(false))
-      env.firstChild.outerHTML = html
+        hasParts = partial.exec(tpl.t)
 
-      tpl._element = newEl = env.firstChild
-      tpl._previousElement = el.parentNode.replaceChild(newEl, el)
+        # Process while we still have partials to consider.
+        while hasParts
+            [match, name] = hasParts
+            parts.push(name)
 
-      return tpl.postrender(el)
+            hasParts = partial.exec(tpl.t)
 
-  t.load = t::load = (name) ->
-    return load(name)
+        # If we're not done, load partials asynchronously and continue from there.
+        if parts.length
+            tpl.load parts, (partials) ->
 
-  t.register = t::register = (name, tpl) ->
-    return load(name, tpl)
+                src = tpl.t
+                tpl.t = src.replace partial, (_, name) ->
 
-  t.macro = t::macro = (name, fn) ->
-    return macro(name, fn)
+                    if partials[name]
+                        part = partials[name]
 
-  t.parsed = (name) ->
-    return parsed[name]
+                        return part.t if not extend.test(part.t)
 
-  t::bind = (el) ->
-    @_element = el if el and el.nodeType
-    @_previousElement = null
-    return @
+                        e = new Error('[t+]: Invalid include: ' + name + '. Includes may not contain extend blocks.')
+                        return cb and cb(false, e)
 
-  t::render = (vars) ->
-    return parse @, vars
+                    else return _
 
-  # Fallbacks only to prevent errors.
-  # Overwrite with custom logic (animation, etc)
-  # at the instance level.
-  t::prerender = (el, html, cb) -> cb()
-  t::postrender = () ->
+                return includes(tpl, vars, cb)
 
-  return t
+        # Otherwise no partials remain. Good job!
+        else 
+            tpl.parsed = tpl.t
+            return parse(tpl, vars, false, cb)
+
+    # Asynchronously & recursively parses string `tpl.t` until finished, then calls `cb` with the resulting `html`.
+    parse = (tpl, vars, refresh, cb) ->
+
+        # Save a reference to restore post-parse. We have to manipulate `tpl.t` in order to utilize the original `t` rendering engine, so we restore the original unparsed copy at the end.
+        src = tpl.t
+
+        # If dependencies have changed, pass `refresh` as `true` to reparse and recache child templates.
+        if refresh or not tpl.parsed
+
+            tpl.parsed = null
+
+            # Check if `tpl` is extending anything, and pass to partial processor if not.
+            hasParent = extend.exec(src)
+            return includes(tpl, vars, cb) if not hasParent
+
+            # Otherwise load `parent` template and replace named `blocks` with `_blocks` from the child template, then process partials.
+            [match, name, rest] = hasParent
+            return tpl.load name, (parent) ->
+
+                tpl.t = parent.t
+                _blocks = {}
+
+                hasBlocks = blocks.exec(src)
+                while hasBlocks
+                    [match, tag, name, content] = hasBlocks
+                    _blocks[name] = content
+                    hasBlocks = blocks.exec(src)
+
+                tpl.t = tpl.t.replace blocks, (_, __, $name, inner) ->
+                    return _blocks[$name] or inner
+
+                return includes(tpl, vars, cb)
+
+        # If nothing has changed, we can use the cached, fully-parsed string template.
+        else
+            tpl.t = tpl.parsed
+
+        # Here's where we pass off to `t`'s rendering engine, and we process for `macro`s on the result.
+        html = render.call(tpl, vars).replace macro, (_, __, name, params, content) ->
+            params = trim(params.split(','))
+            content = content or ''
+
+            m = tpl.macro(name)
+            if m
+                args = []
+                args.push(vars[param]) for param in params
+                try return m.apply(null, args)
+                catch e
+                    console.log('[t+] Macro error:', e)
+
+            else console.log('[t+] No macro found:', name)
+            return content
+
+
+        # Restore the original, unparsed template and trigger callback `cb` with the new `html`.
+        tpl.t = src
+
+        cb and cb(html)
+
+    # Loads a template by `name` and passes it to `callback`. To use a different storage system, just overwrite this method and the one below, both on `t` class and on `t::prototype`, conforming to the spec discussed [above](#).
+    t.load = t::load = (name, callback) ->
+        return load(name, null, callback)
+
+    # Puts a template `tpl` by `name`. `callback` is optional. Overwrite this to customize storage.
+    t.put = t::put = (name, tpl, callback) ->
+        return load(name, tpl, callback)
+
+    # Registers a macro and returns the macro function by `name`
+    t.macro = t::macro = (name, fn) ->
+        return macro(name, fn)
+
+    # Our new version of `render`. Pass template context `vars`, a `callback` expecting parsed HTML, and an optional boolean `refresh` to indicate whether to use the interpreted templates cache or parse anew.
+    t::render = (vars, callback, refresh=false) ->
+        return parse(@, vars, refresh, callback)
+
+    # Return our template class, now on (just a little) steroids.
+    return t
+
+
+
+
+
+
+
+
+
+
