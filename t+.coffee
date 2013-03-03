@@ -26,7 +26,7 @@
 #     * Content between blocks in child template will be ignored
 #   * Interpreted templates cached for fast re-render
 # * Simple template management via `t.put(name, template, callback)` and `t.load(name, callback)`
-#   * Extensible - simply overwrite `t.put` & `t.load` with your own logic and return an instance of `t`
+#   * Extensible - simply overwrite `t.put` & `t.load` with your own logic and pass an instance of `t` when calling 'callback'.
 #   * Register functions should expect `(name, template, callback)`, while loader functions should accept `name` and pass template to `callback`.
 # * Macros
 #   * Inline: `{{+<name>(param1, param2...)}}`. If an error occurs, returns `''`.
