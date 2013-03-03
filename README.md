@@ -1,7 +1,7 @@
 # t+.coffee
 ## t.coffee, on steroids.
 
-Check out [the docs](https://davidrekow.github.com/tpluscoffee).
+Check out [the docs](http://davidrekow.github.com/tpluscoffee).
 
 ### How to use
 
