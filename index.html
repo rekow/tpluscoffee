@@ -10,17 +10,27 @@
 <ul><li>Include: <code>{{&amp;&lt;name&gt;}}</code>.</li>
 <li><p>Extend, replacing named blocks: </p>
 
-<p><code>{{^parent}}{{#block1}}content{{/block1}}{{#block2}}content 2{{/block2}}</code></p></li>
+<pre><code>{{^parent}}
+    {{#block1}}content{{/block1}}
+    {{#block2}}content 2{{/block2}}
+</code></pre></li>
 <li><p>Extend block <code>{{^&lt;name&gt;}}</code> must be first block in template</p></li>
 <li>Content between blocks in child template will be ignored</li>
 <li>Interpreted templates cached for fast re-render</li></ul></li>
-<li>Simple template management via <code>t.put(name, stringTemplateOrT)</code> and <code>t.load(name)</code>
+<li>Simple template management via <code>t.put(name, template, callback)</code> and <code>t.load(name, callback)</code>
 <ul><li>Extensible - simply overwrite <code>t.put</code> &amp; <code>t.load</code> with your own logic and return an instance of <code>t</code></li>
-<li>Register functions should expect <code>(name, template)</code>, while loader functions should accept <code>name</code></li></ul></li>
-<li>Macros
-<ul><li>Inline: <code>{{+&lt;name&gt;(param1, param2)}}</code>. If an error occurs, returns <code>''</code>.</li>
-<li>Block: <code>{{+&lt;name&gt;(param1, param2...)}} &lt;default content&gt; {{/&lt;name&gt;}}</code>. If an error occurs, returns <code>&lt;default content&gt;</code>.</li>
-<li>Must be registered first: <code>t.macro(name, fn)</code>.</li></ul></li>
+<li>Register functions should expect <code>(name, template, callback)</code>, while loader functions should accept <code>name</code> and pass template to <code>callback</code>.</li></ul></li>
+<li><p>Macros</p>
+
+<ul><li>Inline: <code>{{+&lt;name&gt;(param1, param2...)}}</code>. If an error occurs, returns <code>''</code>.</li>
+<li><p>Block:  </p>
+
+<pre><code># If an error occurs, returns &lt;default content&gt;.
+{{+&lt;name&gt;(param1, param2...)}}
+    &lt;default content&gt;
+{{/&lt;name&gt;}}
+</code></pre></li>
+<li><p>Must be registered first: <code>t.macro(name, fn)</code>.</p></li></ul></li>
 </ul>             </td>             <td class="code">               <div class="highlight"><pre></pre></div>             </td>           </tr>                               <tr id="section-7">             <td class="docs">               <div class="pilwrap">                 <a class="pilcrow" href="#section-7">&#182;</a>               </div>               <p>Save reference to <code>@t</code> so we can overwrite.</p>             </td>             <td class="code">               <div class="highlight"><pre><span class="nv">t = </span><span class="nx">@t</span>
 
 <span class="vi">@t = </span><span class="nx">do</span> <span class="nf">(t) -&gt;</span></pre></div>             </td>           </tr>                               <tr id="section-8">             <td class="docs">               <div class="pilwrap">                 <a class="pilcrow" href="#section-8">&#182;</a>               </div>               <p>Save reference to call in <code>parse</code> so we can put our own <code>render</code> on the prototype.</p>             </td>             <td class="code">               <div class="highlight"><pre>    <span class="nv">render = </span><span class="nx">t</span><span class="o">::</span><span class="nx">render</span>
