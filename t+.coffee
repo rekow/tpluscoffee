@@ -18,17 +18,25 @@
 #   * Include: `{{&<name>}}`.
 #   * Extend, replacing named blocks: 
 #
-#           `{{^parent}}{{#block1}}content{{/block1}}{{#block2}}content 2{{/block2}}`
+#             {{^parent}}
+#                 {{#block1}}content{{/block1}}
+#                 {{#block2}}content 2{{/block2}}
 #
 #     * Extend block `{{^<name>}}` must be first block in template
 #     * Content between blocks in child template will be ignored
 #   * Interpreted templates cached for fast re-render
-# * Simple template management via `t.put(name, stringTemplateOrT)` and `t.load(name)`
+# * Simple template management via `t.put(name, template, callback)` and `t.load(name, callback)`
 #   * Extensible - simply overwrite `t.put` & `t.load` with your own logic and return an instance of `t`
-#   * Register functions should expect `(name, template)`, while loader functions should accept `name`
+#   * Register functions should expect `(name, template, callback)`, while loader functions should accept `name` and pass template to `callback`.
 # * Macros
-#   * Inline: `{{+<name>(param1, param2)}}`. If an error occurs, returns `''`.
-#   * Block: `{{+<name>(param1, param2...)}} <default content> {{/<name>}}`. If an error occurs, returns `<default content>`.
+#   * Inline: `{{+<name>(param1, param2...)}}`. If an error occurs, returns `''`.
+#   * Block:  
+#
+#             # If an error occurs, returns <default content>.
+#             {{+<name>(param1, param2...)}}
+#                 <default content>
+#             {{/<name>}}
+#
 #   * Must be registered first: `t.macro(name, fn)`.
 
 # Save reference to `@t` so we can overwrite.
